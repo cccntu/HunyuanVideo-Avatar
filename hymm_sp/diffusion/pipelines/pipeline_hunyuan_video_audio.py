@@ -17,10 +17,14 @@
 #
 # ==============================================================================
 import inspect
+import os
+from contextlib import nullcontext
 from typing import Any, Callable, Dict, List, Optional, Union, Tuple
 import numpy as np
 import torch
 from packaging import version
+import xformers
+from xformers.profiler import PyTorchProfiler
 from diffusers.utils import BaseOutput
 from dataclasses import dataclass
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
@@ -1093,7 +1097,13 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
             audio_prompts_all = audio_prompts_all[:, :132]
 
         if cpu_offload: torch.cuda.empty_cache()
-        with self.progress_bar(total=num_inference_steps) as progress_bar:
+        DISABLE_PROFILER = os.environ.get("DISABLE_PROFILER") == "1"
+        profiler_context = (nullcontext() if DISABLE_PROFILER 
+                           else xformers.profiler.profile(
+                               output_dir="profile_data", 
+                               module=self.transformer,
+                               schedule=[(PyTorchProfiler, 3, 5)]))
+        with profiler_context as prof, self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
@@ -1276,6 +1286,9 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
 
                     # compute the previous noisy sample x_t -> x_t-1
                     latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
+                    
+                    if not DISABLE_PROFILER:
+                        xformers.profiler.step()
 
                     if callback_on_step_end is not None:
                         callback_kwargs = {}

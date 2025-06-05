@@ -45,8 +45,13 @@ def data_preprocess_server(args, image_path, audio_path, prompts, feature_extrac
     new_w = round(w * scale / 64) * 64
     new_h = round(h * scale / 64) * 64
 
-    if img_size == 704:
-        img_size_long = 1216
+    ratio = 832 / 704          # native aspect ≈ 1.1818
+    
+    # keep native aspect where possible
+    if args.get('img_size_long', None) is not None:
+        img_size_long = args.img_size_long
+    else:
+        img_size_long = int(round(img_size * ratio / 8)) * 8
     if new_w * new_h > img_size * img_size_long:
         scale = math.sqrt(img_size * img_size_long / w / h)
         new_w = round(w * scale / 64) * 64

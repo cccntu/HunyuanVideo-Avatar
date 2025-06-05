@@ -103,8 +103,13 @@ class VideoAudioTextLoaderVal(Dataset):
         new_w = round(w * scale / 64) * 64
         new_h = round(h * scale / 64) * 64
 
-        if img_size == 704:
-            img_size_long = 1216
+        ratio = 832 / 704          # native aspect ≈ 1.1818
+        
+        # keep native aspect where possible
+        if hasattr(self, 'img_size_long') and self.img_size_long is not None:
+            img_size_long = self.img_size_long
+        else:
+            img_size_long = int(round(img_size * ratio / 8)) * 8
         if new_w * new_h > img_size * img_size_long:
             import math
             scale = math.sqrt(img_size * img_size_long / w / h)

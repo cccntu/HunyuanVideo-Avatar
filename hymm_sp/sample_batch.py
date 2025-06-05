@@ -20,6 +20,7 @@ from hymm_sp.modules.parallel_states import (
 
 from transformers import WhisperModel
 from transformers import AutoFeatureExtractor
+from torch.profiler import profile, record_function, ProfilerActivity
 
 MODEL_OUTPUT_PATH = os.environ.get('MODEL_BASE')
 
@@ -72,33 +73,50 @@ def main():
     sampler = DistributedSampler(video_dataset, num_replicas=1, rank=0, shuffle=False, drop_last=False)
     json_loader = DataLoader(video_dataset, batch_size=1, shuffle=False, sampler=sampler, drop_last=False)
 
-    for batch_index, batch in enumerate(json_loader, start=1):
+    with profile(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        record_shapes=True,
+        with_stack=True,
+        schedule=torch.profiler.schedule(
+            wait=2,      # Skip first 2 steps
+            warmup=0,    # No additional warmup
+            active=5,    # Profile next 5 steps
+            repeat=1     # Do this once
+        ),
+        on_trace_ready=lambda prof: prof.export_chrome_trace(f"{save_path}/trace_rank_{rank}_batch.json")
+    ) as prof:
+        for batch_index, batch in enumerate(json_loader, start=1):
+            with record_function(f"batch_{batch_index}"):
+                fps = batch["fps"]
+                videoid = batch['videoid'][0]
+                audio_path = str(batch["audio_path"][0])
+                save_path = args.save_path 
+                output_path = f"{save_path}/{videoid}.mp4"
+                output_audio_path = f"{save_path}/{videoid}_audio.mp4"
 
-        fps = batch["fps"]
-        videoid = batch['videoid'][0]
-        audio_path = str(batch["audio_path"][0])
-        save_path = args.save_path 
-        output_path = f"{save_path}/{videoid}.mp4"
-        output_audio_path = f"{save_path}/{videoid}_audio.mp4"
+                samples = hunyuan_video_sampler.predict(args, batch, wav2vec, feature_extractor, align_instance)
+                
+                sample = samples['samples'][0].unsqueeze(0)                    # denoised latent, (bs, 16, t//4, h//8, w//8)
+                sample = sample[:, :, :batch["audio_len"][0]]
+                
+                video = rearrange(sample[0], "c f h w -> f h w c")
+                video = (video * 255.).data.cpu().numpy().astype(np.uint8)  # （f h w c)
+                
+                torch.cuda.empty_cache()
 
-        samples = hunyuan_video_sampler.predict(args, batch, wav2vec, feature_extractor, align_instance)
-        
-        sample = samples['samples'][0].unsqueeze(0)                    # denoised latent, (bs, 16, t//4, h//8, w//8)
-        sample = sample[:, :, :batch["audio_len"][0]]
-        
-        video = rearrange(sample[0], "c f h w -> f h w c")
-        video = (video * 255.).data.cpu().numpy().astype(np.uint8)  # （f h w c)
-        
-        torch.cuda.empty_cache()
-
-        final_frames = []
-        for frame in video:
-            final_frames.append(frame)
-        final_frames = np.stack(final_frames, axis=0)
-        
-        if rank == 0:
-            imageio.mimsave(output_path, final_frames, fps=fps.item())
-            os.system(f"ffmpeg -i '{output_path}' -i '{audio_path}' -shortest '{output_audio_path}' -y -loglevel quiet; rm '{output_path}'")
+                final_frames = []
+                for frame in video:
+                    final_frames.append(frame)
+                final_frames = np.stack(final_frames, axis=0)
+                
+                if rank == 0:
+                    imageio.mimsave(output_path, final_frames, fps=fps.item())
+                    os.system(f"ffmpeg -i '{output_path}' -i '{audio_path}' -shortest '{output_audio_path}' -y -loglevel quiet; rm '{output_path}'")
+            
+            prof.step()  # Advance profiler step counter
+            
+            if batch_index >= 7:  # Stop after 2 warmup + 5 profiled = 7 total
+                break
 
 
 

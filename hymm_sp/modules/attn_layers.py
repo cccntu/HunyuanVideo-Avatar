@@ -75,7 +75,7 @@ def merge_real_im(out, re, im):
     return out
 
 
-@torch.compile
+@torch.compile(mode='max-autotune',fullgraph=True)
 def apply_rotary_emb(
         xq: torch.Tensor,
         xk: torch.Tensor,

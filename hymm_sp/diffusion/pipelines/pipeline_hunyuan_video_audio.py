@@ -1191,7 +1191,7 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
                                 }
                                 noise_pred_uncond = self.transformer(latent_model_input[:1], t_expand[:1], ref_latents=ref_latents[:1], text_states=prompt_embeds_input[:1], text_mask=prompt_mask_input[:1], text_states_2=prompt_embeds_2_input[:1], freqs_cos=freqs_cis[0], freqs_sin=freqs_cis[1], guidance=guidance_expand, return_dict=True, is_cache=is_cache, **additional_kwargs,)['x']
                                 uncond_cache_tensor = self.transformer.cache_out
-                                torch.cuda.empty_cache()
+                                #torch.cuda.empty_cache()
 
                                 additional_kwargs = {
                                     "motion_exp": motion_exp_input[1:],        
@@ -1204,7 +1204,7 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
                                 self.transformer.cache_out = torch.cat([uncond_cache_tensor, self.transformer.cache_out], dim=0)
 
                                 noise_pred = torch.cat([noise_pred_uncond, noise_pred_text], dim=0)
-                                torch.cuda.empty_cache()
+                                #torch.cuda.empty_cache()
                             else:
                                 additional_kwargs = {
                                     "motion_exp": motion_exp_input,        
@@ -1214,7 +1214,7 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
                                     "face_mask": face_masks_input         
                                 }
                                 noise_pred = self.transformer(latent_model_input, t_expand, ref_latents=ref_latents, text_states=prompt_embeds_input, text_mask=prompt_mask_input, text_states_2=prompt_embeds_2_input, freqs_cos=freqs_cis[0], freqs_sin=freqs_cis[1], guidance=guidance_expand, return_dict=True, is_cache=is_cache, **additional_kwargs,)['x']
-                                torch.cuda.empty_cache()
+                                #torch.cuda.empty_cache()
 
                             if self.cache_tensor is None:
                                 self.cache_tensor = {
@@ -1250,7 +1250,7 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
                                 noise_pred_uncond = self.transformer(latent_model_input[:1], t_expand[:1], ref_latents=ref_latents[:1], text_states=prompt_embeds_input[:1], text_mask=prompt_mask_input[:1], text_states_2=prompt_embeds_2_input[:1], freqs_cos=freqs_cis[0], freqs_sin=freqs_cis[1], guidance=guidance_expand, return_dict=True, is_cache=is_cache, **additional_kwargs,)['x']
 
 
-                                torch.cuda.empty_cache()
+                                #torch.cuda.empty_cache()
 
                                 additional_kwargs = {
                                     "motion_exp": motion_exp_input[1:],        
@@ -1264,7 +1264,7 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
                                 noise_pred = torch.cat([noise_pred_uncond, noise_pred_text], dim=0)
 
                                 self.transformer.cache_out = tmp
-                                torch.cuda.empty_cache()
+                                #torch.cuda.empty_cache()
                             else:
                                 additional_kwargs = {
                                     "motion_exp": motion_exp_input,        
@@ -1274,7 +1274,7 @@ class HunyuanVideoAudioPipeline(DiffusionPipeline):
                                     "face_mask": face_masks_input         
                                 }
                                 noise_pred = self.transformer(latent_model_input, t_expand, ref_latents=ref_latents, text_states=prompt_embeds_input, text_mask=prompt_mask_input, text_states_2=prompt_embeds_2_input, freqs_cos=freqs_cis[0], freqs_sin=freqs_cis[1], guidance=guidance_expand, return_dict=True, is_cache=is_cache, **additional_kwargs,)['x']
-                                torch.cuda.empty_cache()
+                                #torch.cuda.empty_cache()
                     # perform guidance
                     if self.do_classifier_free_guidance:
                         noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)

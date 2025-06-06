@@ -63,19 +63,14 @@ def reshape_for_broadcast(freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]], x
         return freqs_cis.view(*shape)
 
 
-def split_real_im(t):
-    """Split tensor into real and imaginary parts using strided views - no copy"""
-    return t[..., ::2], t[..., 1::2]
+def rotate_half(x):
+    """Rotate half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
 
 
-def merge_real_im(out, re, im):
-    """Merge real and imaginary parts in-place - no extra buffer"""
-    out[..., ::2] = re
-    out[..., 1::2] = im
-    return out
-
-
-@torch.compile(mode='max-autotune',fullgraph=True)
+@torch.compile(mode='max-autotune', fullgraph=True)
 def apply_rotary_emb(
         xq: torch.Tensor,
         xk: torch.Tensor,
@@ -85,11 +80,6 @@ def apply_rotary_emb(
     """
     Apply rotary embeddings to input tensors using the given frequency tensor.
 
-    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the provided
-    frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and the frequency tensor
-    is reshaped for broadcasting compatibility. The resulting tensors contain rotary embeddings and are
-    returned as real tensors.
-
     Args:
         xq (torch.Tensor): Query tensor to apply rotary embeddings. [B, S, H, D]
         xk (torch.Tensor): Key tensor to apply rotary embeddings.   [B, S, H, D]
@@ -98,35 +88,12 @@ def apply_rotary_emb(
 
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
-
     """
     assert isinstance(freqs_cis, tuple) and len(freqs_cis) == 2, f"freqs_cis must be a tuple of (cos, sin), got {type(freqs_cis)}"
-    
-    # Split into real/imaginary parts using strided views
-    q_re, q_im = split_real_im(xq)  # Each is [B, S, H, D/2]
-    k_re, k_im = split_real_im(xk)  # Each is [B, S, H, D/2]
-    
-    # Reshape cos/sin for broadcasting with split dimensions (D/2)
-    cos_raw, sin_raw = freqs_cis
-    ndim = xq.ndim
-    if head_first:
-        # cos/sin: [S, D] -> [1, S, 1, D/2] to broadcast with [B, S, H, D/2]
-        cos = cos_raw.view(1, cos_raw.shape[0], 1, cos_raw.shape[1] // 2)
-        sin = sin_raw.view(1, sin_raw.shape[0], 1, sin_raw.shape[1] // 2)
-    else:
-        # cos/sin: [S, D] -> [1, S, 1, D/2] to broadcast with [B, S, H, D/2]  
-        cos = cos_raw.view(1, cos_raw.shape[0], 1, cos_raw.shape[1] // 2)
-        sin = sin_raw.view(1, sin_raw.shape[0], 1, sin_raw.shape[1] // 2)
-    
-    # Allocate output tensors
-    out_q = torch.empty_like(xq)
-    out_k = torch.empty_like(xk)
-    
-    # Apply rotary embedding: (re + i*im) * (cos + i*sin) = (re*cos - im*sin) + i*(im*cos + re*sin)
-    merge_real_im(out_q, q_re * cos - q_im * sin, q_im * cos + q_re * sin)
-    merge_real_im(out_k, k_re * cos - k_im * sin, k_im * cos + k_re * sin)
-    
-    return out_q, out_k
+    cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)
+    xq_out = (xq.float() * cos + rotate_half(xq) * sin).type_as(xq)
+    xk_out = (xk.float() * cos + rotate_half(xk) * sin).type_as(xk)
+    return xq_out, xk_out
 
 
 class BasicAttentionLayer(nn.Module):

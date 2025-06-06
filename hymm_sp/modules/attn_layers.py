@@ -63,15 +63,23 @@ def reshape_for_broadcast(freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]], x
         return freqs_cis.view(*shape)
 
 
-def rotate_half(x):
-    x_real, x_imag = x.float().reshape(*x.shape[:-1], -1, 2).unbind(-1)  # [B, S, H, D//2]
-    return torch.stack([-x_imag, x_real], dim=-1).flatten(3)
+def split_real_im(t):
+    """Split tensor into real and imaginary parts using strided views - no copy"""
+    return t[..., ::2], t[..., 1::2]
 
 
+def merge_real_im(out, re, im):
+    """Merge real and imaginary parts in-place - no extra buffer"""
+    out[..., ::2] = re
+    out[..., 1::2] = im
+    return out
+
+
+@torch.compile
 def apply_rotary_emb(
         xq: torch.Tensor,
         xk: torch.Tensor,
-        freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]],
+        freqs_cis: Tuple[torch.Tensor, torch.Tensor],
         head_first: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
@@ -85,31 +93,29 @@ def apply_rotary_emb(
     Args:
         xq (torch.Tensor): Query tensor to apply rotary embeddings. [B, S, H, D]
         xk (torch.Tensor): Key tensor to apply rotary embeddings.   [B, S, H, D]
-        freqs_cis (torch.Tensor or tuple): Precomputed frequency tensor for complex exponential.
+        freqs_cis (Tuple[torch.Tensor, torch.Tensor]): Precomputed cos and sin frequency tensors.
         head_first (bool): head dimension first (except batch dim) or not.
 
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
 
     """
-    xk_out = None
-    if isinstance(freqs_cis, tuple):
-        cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)    # [S, D]
-        # real * cos - imag * sin
-        # imag * cos + real * sin
-        xq_out = (xq.float() * cos + rotate_half(xq.float()) * sin).type_as(xq)
-        xk_out = (xk.float() * cos + rotate_half(xk.float()) * sin).type_as(xk)
-    else:
-        # view_as_complex will pack [..., D/2, 2](real) to [..., D/2](complex)
-        xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))  # [B, S, H, D//2]
-        freqs_cis = reshape_for_broadcast(freqs_cis, xq_, head_first)   # [S, D//2] --> [1, S, 1, D//2]
-        # (real, imag) * (cos, sin) = (real * cos - imag * sin, imag * cos + real * sin)
-        # view_as_real will expand [..., D/2](complex) to [..., D/2, 2](real)
-        xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3).type_as(xq)
-        xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))  # [B, S, H, D//2]
-        xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3).type_as(xk)
-
-    return xq_out, xk_out
+    assert isinstance(freqs_cis, tuple) and len(freqs_cis) == 2, f"freqs_cis must be a tuple of (cos, sin), got {type(freqs_cis)}"
+    cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)    # [S, D]
+    
+    # Split into real/imaginary parts using strided views
+    q_re, q_im = split_real_im(xq)
+    k_re, k_im = split_real_im(xk)
+    
+    # Allocate output tensors
+    out_q = torch.empty_like(xq)
+    out_k = torch.empty_like(xk)
+    
+    # Apply rotary embedding: (re + i*im) * (cos + i*sin) = (re*cos - im*sin) + i*(im*cos + re*sin)
+    merge_real_im(out_q, q_re * cos - q_im * sin, q_im * cos + q_re * sin)
+    merge_real_im(out_k, k_re * cos - k_im * sin, k_im * cos + k_re * sin)
+    
+    return out_q, out_k
 
 
 class BasicAttentionLayer(nn.Module):

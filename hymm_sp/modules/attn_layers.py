@@ -101,11 +101,22 @@ def apply_rotary_emb(
 
     """
     assert isinstance(freqs_cis, tuple) and len(freqs_cis) == 2, f"freqs_cis must be a tuple of (cos, sin), got {type(freqs_cis)}"
-    cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)    # [S, D]
     
     # Split into real/imaginary parts using strided views
-    q_re, q_im = split_real_im(xq)
-    k_re, k_im = split_real_im(xk)
+    q_re, q_im = split_real_im(xq)  # Each is [B, S, H, D/2]
+    k_re, k_im = split_real_im(xk)  # Each is [B, S, H, D/2]
+    
+    # Reshape cos/sin for broadcasting with split dimensions (D/2)
+    cos_raw, sin_raw = freqs_cis
+    ndim = xq.ndim
+    if head_first:
+        # cos/sin: [S, D] -> [1, S, 1, D/2] to broadcast with [B, S, H, D/2]
+        cos = cos_raw.view(1, cos_raw.shape[0], 1, cos_raw.shape[1] // 2)
+        sin = sin_raw.view(1, sin_raw.shape[0], 1, sin_raw.shape[1] // 2)
+    else:
+        # cos/sin: [S, D] -> [1, S, 1, D/2] to broadcast with [B, S, H, D/2]  
+        cos = cos_raw.view(1, cos_raw.shape[0], 1, cos_raw.shape[1] // 2)
+        sin = sin_raw.view(1, sin_raw.shape[0], 1, sin_raw.shape[1] // 2)
     
     # Allocate output tensors
     out_q = torch.empty_like(xq)

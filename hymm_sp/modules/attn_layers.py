@@ -64,10 +64,8 @@ def reshape_for_broadcast(freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]], x
 
 
 def rotate_half(x):
-    """Rotate half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
+    x_real, x_imag = x.float().reshape(*x.shape[:-1], -1, 2).unbind(-1)  # [B, S, H, D//2]
+    return torch.stack([-x_imag, x_real], dim=-1).flatten(3)
 
 
 @torch.compile(mode='max-autotune', fullgraph=True)

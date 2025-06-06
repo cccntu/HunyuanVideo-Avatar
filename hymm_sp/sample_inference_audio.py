@@ -160,6 +160,9 @@ class HunyuanVideoSampler(Inference):
             target_height, 
             target_width, 
             concat_dict)  
+        # Move rotary embeddings to device once to avoid repeated transfers in apply_rotary_emb
+        freqs_cos = freqs_cos.to(self.device)
+        freqs_sin = freqs_sin.to(self.device)
         n_tokens = freqs_cos.shape[0]
 
         generator = torch.Generator(device=self.device).manual_seed(args.seed)

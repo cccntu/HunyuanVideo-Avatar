@@ -95,7 +95,6 @@ def apply_rotary_emb(
     xk_out = None
     if isinstance(freqs_cis, tuple):
         cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)    # [S, D]
-        cos, sin = cos.to(xq.device), sin.to(xq.device)
         # real * cos - imag * sin
         # imag * cos + real * sin
         xq_out = (xq.float() * cos + rotate_half(xq.float()) * sin).type_as(xq)
@@ -103,7 +102,7 @@ def apply_rotary_emb(
     else:
         # view_as_complex will pack [..., D/2, 2](real) to [..., D/2](complex)
         xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))  # [B, S, H, D//2]
-        freqs_cis = reshape_for_broadcast(freqs_cis, xq_, head_first).to(xq.device)   # [S, D//2] --> [1, S, 1, D//2]
+        freqs_cis = reshape_for_broadcast(freqs_cis, xq_, head_first)   # [S, D//2] --> [1, S, 1, D//2]
         # (real, imag) * (cos, sin) = (real * cos - imag * sin, imag * cos + real * sin)
         # view_as_real will expand [..., D/2](complex) to [..., D/2, 2](real)
         xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3).type_as(xq)

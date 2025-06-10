@@ -267,7 +267,7 @@ class SingleStreamBlock(nn.Module):
     def disable_deterministic(self):
         self.deterministic = False
 
-    @torch.compile(fullgraph=True)
+    @torch.compile()#fullgraph=True)
     def forward(
         self,
         x: torch.Tensor,

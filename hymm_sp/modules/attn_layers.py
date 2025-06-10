@@ -182,7 +182,10 @@ def get_q_seqlens(q):
     return cu_seqlens_q, s, q
 
 
-import flash_attn_interface
+try:
+    import flash_attn.flash_attn_interface as flash_attn_interface
+except ImportError:
+    import flash_attn_interface
 
 def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, deterministic=False,
               cu_seqlens=None, max_seqlen=None, cu_seqlens_k=None, max_seqlen_k=None):

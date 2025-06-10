@@ -182,6 +182,8 @@ def get_q_seqlens(q):
     return cu_seqlens_q, s, q
 
 
+import flash_attn_interface
+
 def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, deterministic=False,
               cu_seqlens=None, max_seqlen=None, cu_seqlens_k=None, max_seqlen_k=None):
     """
@@ -215,7 +217,9 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
     if mode == 'torch':
         if attn_mask is not None and attn_mask.dtype != torch.bool:
             attn_mask = attn_mask.to(q.dtype)
-        x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
+            #x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
+            x = flash_attn_interface.flash_attn_func(q, k, v, causal=False)
+
 
     elif mode == 'vanilla':
         scale_factor = 1 / math.sqrt(q.size(-1))

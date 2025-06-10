@@ -6,7 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from diffusers.models import ModelMixin
 from diffusers.configuration_utils import ConfigMixin, register_to_config
-from flash_attn.flash_attn_interface import flash_attn_varlen_func
+import flash_attn_interface
+flash_attn_varlen_func =  flash_attn_interface.flash_attn_varlen_func
+
+#from flash_attn.flash_attn_interface import flash_attn_varlen_func
 
 from .activation_layers import get_activation_layer
 from .norm_layers import get_norm_layer
@@ -284,7 +287,7 @@ class SingleStreamBlock(nn.Module):
 
         q, k, v = rearrange(qkv, "B L (K H D) -> K B L H D", K=3, H=self.num_heads)
         if CPU_OFFLOAD: torch.cuda.empty_cache()
-        
+
         # Apply QK-Norm if needed.
         q = self.q_norm(q).to(v)
         k = self.k_norm(k).to(v)
@@ -350,7 +353,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
     HunyuanVideo Transformer backbone
 
     Inherited from ModelMixin and ConfigMixin for compatibility with diffusers' sampler StableDiffusionPipeline.
-    
+
     Reference:
     [1] Flux.1: https://github.com/black-forest-labs/flux
     [2] MMDiT: http://arxiv.org/abs/2403.03206,
@@ -405,7 +408,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
             raise ValueError(f"Got {rope_dim_list} but expected positional dim {pe_dim}")
         self.hidden_size = hidden_size
         self.num_heads = num_heads
-    
+
         # image projection
         self.img_in = PatchEmbed(
             self.patch_size, self.in_channels, self.hidden_size, **factory_kwargs
@@ -486,7 +489,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         )
         # -------------------- audio_proj_model --------------------
         self.audio_proj = AudioProjNet2(seq_len=10, blocks=5, channels=384, intermediate_dim=1024, output_dim=3072, context_tokens=4)
-        
+
         # -------------------- motion-embeder --------------------
         self.motion_exp = TimestepEmbedder(
                 self.hidden_size // 4,
@@ -504,7 +507,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                 get_activation_layer("silu"),
                 **factory_kwargs
             )
-        
+
         self.before_proj = nn.Linear(self.hidden_size, self.hidden_size)
 
         # -------------------- audio_insert_model --------------------
@@ -512,7 +515,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         self.single_stream_list = []
         self.double_stream_map = {str(i): j for j, i in enumerate(self.double_stream_list)}
         self.single_stream_map = {str(i): j+len(self.double_stream_list) for j, i in enumerate(self.single_stream_list)}
-        
+
         self.audio_adapter_blocks = nn.ModuleList([
             PerceiverAttentionCA(dim=3072, dim_head=1024, heads=33) for _ in range(len(self.double_stream_list) + len(self.single_stream_list))
         ])
@@ -632,13 +635,13 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                 if layer_num in self.double_stream_list:
                     if get_sequence_parallel_state():
                         img = all_gather(img, dim=1)
-                    
-                    real_img = img[:,ref_length:].clone().view(bsz, ot, -1, 3072)  
-                    real_ref_img = torch.zeros_like(img[:,:ref_length].clone())     
-                    
-                    audio_feature_pad = audio_feature_all[:,:1].repeat(1,3,1,1) 
+
+                    real_img = img[:,ref_length:].clone().view(bsz, ot, -1, 3072)
+                    real_ref_img = torch.zeros_like(img[:,:ref_length].clone())
+
+                    audio_feature_pad = audio_feature_all[:,:1].repeat(1,3,1,1)
                     audio_feature_all_insert = torch.cat([audio_feature_pad, audio_feature_all], dim=1).view(bsz, ot, 16, 3072)
-                    
+
                     double_idx = self.double_stream_map[str(layer_num)]
                     real_img = self.audio_adapter_blocks[double_idx](audio_feature_all_insert, real_img).view(bsz, -1, 3072)
                     img = img + torch.cat((real_ref_img, real_img * face_mask), dim=1)
@@ -657,7 +660,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                         # self.cache_out = x
                         tmp = x[:, :-txt_seq_len, ...]
                         if get_sequence_parallel_state():
-                            tmp = all_gather(tmp, dim=1) 
+                            tmp = all_gather(tmp, dim=1)
                         self.cache_out = torch.cat([tmp, x[:, -txt_seq_len:, ...]], dim=1)
 
                     single_block_args = [x, vec, txt_seq_len, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv, (freqs_cos, freqs_sin)]
@@ -683,12 +686,12 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         img = x[:, :-txt_seq_len, ...]
 
         if get_sequence_parallel_state():
-            img = all_gather(img, dim=1) 
+            img = all_gather(img, dim=1)
         img = img[:, ref_length:]
         # ---------------------------- Final layer ------------------------------
         img = self.final_layer(img, vec)  # (N, T, patch_size ** 2 * out_channels)
         img = self.unpatchify(img, tt, th, tw)
-        
+
         if return_dict:
             out['x'] = img
             return out
@@ -708,7 +711,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         imgs = x.reshape(shape=(x.shape[0], c, t * pt, h * ph, w * pw))
 
         return imgs
-    
+
     def params_count(self):
         counts = {
             "double": sum([

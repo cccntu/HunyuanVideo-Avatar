@@ -8,6 +8,8 @@ try:
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
 except ImportError:
     from flash_attn_interface import flash_attn_varlen_func
+    flash_attn_varlen_func = torch._dynamo.disable(flash_attn_varlen_func)
+
 
 
 

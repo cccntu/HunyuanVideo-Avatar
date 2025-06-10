@@ -236,14 +236,14 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
     if mode == 'torch':
         if attn_mask is not None and attn_mask.dtype != torch.bool:
             attn_mask = attn_mask.to(q.dtype)
-        x = sdpa = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
-        flash3 = flash3_sdp(q, k, v)#, return_attn_probs=False)
+        #x = sdpa = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
+        x = flash3_sdp(q, k, v)#, return_attn_probs=False)
         #print(f'{drop_rate=} {causal=}')
         #print(f'{attn_mask=}')
-        print(f"{sdpa.shape=}")
-        flash = flash3[0]
-        all_close = torch.allclose(sdpa, flash)
-        print(f"{sdpa - flash = }")
+        #print(f"{sdpa.shape=}")
+        #flash = flash3[0]
+        #all_close = torch.allclose(sdpa, flash)
+        #print(f"{sdpa - flash = }")
         #if torch.is_tensor(flash):
         #    print(f"{flash.shape=}")
         #else:

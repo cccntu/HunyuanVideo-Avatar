@@ -221,7 +221,7 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
         if attn_mask is not None and attn_mask.dtype != torch.bool:
             attn_mask = attn_mask.to(q.dtype)
             #x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
-            x = flash_attn_interface.flash_attn_func(q, k, v, causal=False)
+        x = flash_attn_interface.flash_attn_func(q, k, v, causal=False)
 
 
     elif mode == 'vanilla':

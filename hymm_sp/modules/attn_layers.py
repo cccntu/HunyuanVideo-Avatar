@@ -222,7 +222,8 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
             attn_mask = attn_mask.to(q.dtype)
         x = sdpa = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
         flash = flash_attn_interface.flash_attn_func(q, k, v, causal=False)
-        print(sdpa.shape, flash.shape)
+        print(f'{drop_rate=} {causal=}')
+        print(sdpa.shape, (_.shape for _ in flash) )
 
 
     elif mode == 'vanilla':

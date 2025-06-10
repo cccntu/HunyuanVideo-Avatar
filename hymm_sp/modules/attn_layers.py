@@ -187,6 +187,22 @@ try:
 except ImportError:
     import flash_attn_interface
 
+def flash3_sdp(q, k, v, *, causal=False, scale=None):
+    # F.scaled_dot_product_attention  : (B,  H, S, D)
+    # flash_attn_func (Flash-Attn-3) : (B,  S, H, D)
+    q_ = q.transpose(1, 2).contiguous()      # (B,S,H,D)
+    k_ = k.transpose(1, 2).contiguous()
+    v_ = v.transpose(1, 2).contiguous()
+
+    out, _ = flash_attn_interface.flash_attn_func(
+        q_, k_, v_,
+        softmax_scale=scale,    # defaults to 1/√dₖ inside the kernel
+        causal=causal,
+    )                           # (B,S,H,D)
+
+    return out.transpose(1, 2)  # back to (B,H,S,D)
+
+
 def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, deterministic=False,
               cu_seqlens=None, max_seqlen=None, cu_seqlens_k=None, max_seqlen_k=None):
     """
@@ -221,7 +237,7 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
         if attn_mask is not None and attn_mask.dtype != torch.bool:
             attn_mask = attn_mask.to(q.dtype)
         x = sdpa = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
-        flash3 = flash_attn_interface.flash_attn_func(q, k, v, causal=False)#, return_attn_probs=False)
+        flash3 = flash3_sdp(q, k, v)#, return_attn_probs=False)
         #print(f'{drop_rate=} {causal=}')
         #print(f'{attn_mask=}')
         print(f"{sdpa.shape=}")
@@ -235,6 +251,8 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
         #    for i, x in enumerate(flash):
         #        print(f"flash.{i} {x.shape=}")
         #    raise RuntimeError
+
+
 
 
     elif mode == 'vanilla':

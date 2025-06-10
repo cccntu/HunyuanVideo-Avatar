@@ -222,13 +222,15 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
             attn_mask = attn_mask.to(q.dtype)
         x = sdpa = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal)
         flash = flash_attn_interface.flash_attn_func(q, k, v, causal=False)#, return_attn_probs=False)
-        print(f'{drop_rate=} {causal=}')
-        print(f'{attn_mask=}')
+        #print(f'{drop_rate=} {causal=}')
+        #print(f'{attn_mask=}')
         print(f"{sdpa.shape=}")
         if torch.is_tensor(flash):
             print(f"{flash.shape=}")
         else:
             print(f'flash is not tensor {len(flash)=}')
+            for i, x in enumerate(flash):
+                print(f"flash.{i} {x.shape=}")
             raise RuntimeError
 
 

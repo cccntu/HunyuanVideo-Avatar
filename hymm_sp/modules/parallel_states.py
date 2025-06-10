@@ -10,6 +10,7 @@ except ImportError:
     from flash_attn_interface import flash_attn_varlen_func
 
 
+
 class COMM_INFO:
     def __init__(self):
         self.group = None
@@ -342,7 +343,7 @@ def parallel_attention(q, k, v, img_q_len, img_kv_len, cu_seqlens_q, cu_seqlens_
             x.view(x.shape[0] * x.shape[1], *x.shape[2:])
             for x in [query, key, value]
         ]
-    hidden_states = flash_attn_varlen_func(
+    hidden_states, _ = flash_attn_varlen_func(
         query,
         key,
         value,
@@ -353,7 +354,7 @@ def parallel_attention(q, k, v, img_q_len, img_kv_len, cu_seqlens_q, cu_seqlens_
     )
     # B, S, 3, H, D
     hidden_states = hidden_states.view(bsz, max_seqlen_q, head, head_dim).contiguous()
-    
+
     hidden_states, encoder_hidden_states = hidden_states.split_with_sizes((sequence_length, encoder_sequence_length),
                                                                             dim=1)
     if get_sequence_parallel_state():

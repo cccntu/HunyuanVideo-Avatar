@@ -172,7 +172,7 @@ class DoubleStreamBlock(nn.Module):
                 x.view(x.shape[0] * x.shape[1], *x.shape[2:])
                 for x in [q, k, v]
             ]
-            attn = flash_attn_varlen_func(
+            attn, _ = flash_attn_varlen_func(
                 q,
                 k,
                 v,
@@ -315,7 +315,7 @@ class SingleStreamBlock(nn.Module):
                 for x in [q, k, v]
             ]
 
-            attn = flash_attn_varlen_func(
+            attn, _ = flash_attn_varlen_func(
                 q,
                 k,
                 v,

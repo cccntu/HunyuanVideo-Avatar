@@ -227,7 +227,7 @@ def attention(q, k, v, mode, drop_rate=0, attn_mask=None, causal=False, determin
         print(f"{sdpa.shape=}")
         flash = flash3[0]
         all_close = torch.allclose(sdpa, flash)
-        print(f{sdpa - flash = })
+        print(f"{sdpa - flash = }")
         #if torch.is_tensor(flash):
         #    print(f"{flash.shape=}")
         #else:
